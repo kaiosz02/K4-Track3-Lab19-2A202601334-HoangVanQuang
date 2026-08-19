@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 19 Guide: Production-Grade GraphRAG vs Flat RAG</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-primary: #0a0f1d;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.75);
+            --bg-card-hover: rgba(31, 41, 55, 0.85);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(99, 102, 241, 0.35);
+            
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-indigo: #6366f1;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --glow-indigo: rgba(99, 102, 241, 0.25);
+            --glow-cyan: rgba(6, 182, 212, 0.25);
+            --glow-emerald: rgba(16, 185, 129, 0.25);
+            
+            --font-sans: 'Plus Jakarta Sans', sans-serif;
+            --font-heading: 'Outfit', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+            
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+        }
+
+        /* Top Progress Bar */
+        .progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            z-index: 100;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 10%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-indigo), var(--accent-purple));
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 12px var(--accent-indigo);
+        }
+
+        /* Navigation Header */
+        .header {
+            position: fixed;
+            top: 4px;
+            left: 0;
+            width: 100%;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 90;
+            background: linear-gradient(to bottom, rgba(10, 15, 29, 0.95), transparent);
+            backdrop-filter: blur(8px);
+        }
+
+        .brand-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .brand-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.1rem;
+            box-shadow: 0 0 16px var(--glow-indigo);
+        }
+        .brand-text h1 {
+            font-family: var(--font-heading);
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(90deg, #fff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand-text p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .btn-icon {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        .btn-icon:hover {
+            color: var(--text-primary);
+            background: var(--bg-card-hover);
+            border-color: var(--border-highlight);
+            transform: translateY(-1px);
+        }
+        .slide-counter {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+        }
+
+        /* Slide Presentation Container */
+        .slides-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slide {
+            position: absolute;
+            width: 90%;
+            max-width: 1280px;
+            height: 78vh;
+            padding: 40px;
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.96) translateY(20px);
+            transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            user-select: text;
+        }
+
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: scale(1) translateY(0);
+            z-index: 10;
+        }
+
+        /* Slide Components */
+        .slide-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 12px;
+            border-radius: 999px;
+            width: fit-content;
+            margin-bottom: 12px;
+        }
+        .tag-cyan { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+        .tag-indigo { background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); border: 1px solid rgba(99, 102, 241, 0.3); }
+        .tag-purple { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); border: 1px solid rgba(139, 92, 246, 0.3); }
+        .tag-emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .tag-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        .slide-title {
+            font-family: var(--font-heading);
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 8px;
+            line-height: 1.2;
+            background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .slide-subtitle {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            font-weight: 400;
+        }
+
+        .slide-body {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .slide-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .slide-body::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+        }
+        .slide-body::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+        }
+        .slide-body::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        /* Interactive Cards */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--border-highlight), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-highlight);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+        }
+        .card:hover::before {
+            opacity: 1;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .icon-cyan { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); }
+        .icon-indigo { background: rgba(99, 102, 241, 0.15); color: var(--accent-indigo); }
+        .icon-purple { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+        .icon-emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+        .icon-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+        .icon-rose { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); }
+
+        .card-title {
+            font-family: var(--font-heading);
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .card-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Step List */
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .step-item {
+            display: flex;
+            gap: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-radius: var(--radius-md);
+            align-items: flex-start;
+            transition: all 0.2s ease;
+        }
+        .step-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+        .step-num {
+            width: 28px;
+            height: 28px;
+            background: var(--accent-indigo);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px var(--glow-indigo);
+        }
+        .step-content h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .step-content p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Code Block Component */
+        .code-wrapper {
+            position: relative;
+            background: #080c16;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            font-family: var(--font-mono);
+        }
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .code-lang {
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--accent-cyan);
+        }
+        .btn-copy {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s;
+        }
+        .btn-copy:hover {
+            color: var(--text-primary);
+        }
+        pre {
+            padding: 16px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+        code {
+            font-family: var(--font-mono);
+        }
+        .hl-keyword { color: #c084fc; font-weight: 600; }
+        .hl-string { color: #34d399; }
+        .hl-func { color: #38bdf8; }
+        .hl-comment { color: #64748b; font-style: italic; }
+        .hl-param { color: #f472b6; }
+
+        /* Checklist Component */
+        .checklist {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 14px 18px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .check-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .check-item.done {
+            border-color: rgba(16, 185, 129, 0.4);
+            background: rgba(16, 185, 129, 0.05);
+        }
+        .custom-checkbox {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            border: 2px solid var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .check-item.done .custom-checkbox {
+            background: var(--accent-emerald);
+            border-color: var(--accent-emerald);
+            color: #fff;
+        }
+        .check-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .check-item.done .check-text {
+            color: var(--text-primary);
+            text-decoration: line-through;
+            opacity: 0.85;
+        }
+
+        /* Bottom Controls Bar */
+        .footer-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 90;
+            background: linear-gradient(to top, rgba(10, 15, 29, 0.95), transparent);
+            backdrop-filter: blur(8px);
+        }
+
+        .nav-buttons {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .btn-nav {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            outline: none;
+        }
+        .btn-nav:hover:not(:disabled) {
+            background: var(--bg-card-hover);
+            border-color: var(--border-highlight);
+            box-shadow: 0 0 16px var(--glow-indigo);
+            transform: translateY(-2px);
+        }
+        .btn-nav:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .btn-nav-primary {
+            background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
+            border: none;
+            box-shadow: 0 4px 16px var(--glow-indigo);
+        }
+        .btn-nav-primary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .shortcuts-hint {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .key-badge {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+
+        /* Drawer / Sidebar TOC */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: -380px;
+            width: 360px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            z-index: 100;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 12px 0 36px rgba(0, 0, 0, 0.5);
+        }
+        .drawer.open {
+            left: 0;
+        }
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .drawer-header h3 {
+            font-family: var(--font-heading);
+            font-size: 1.15rem;
+            color: var(--text-primary);
+        }
+        .toc-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toc-item {
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+        .toc-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+        .toc-item.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent-indigo);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        /* Hero / Cover Slide */
+        .cover-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            height: 100%;
+            gap: 20px;
+        }
+        .cover-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid var(--border-highlight);
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-indigo);
+            box-shadow: 0 0 20px var(--glow-indigo);
+        }
+        .cover-title {
+            font-family: var(--font-heading);
+            font-size: 3.4rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #ffffff 10%, #67e8f9 50%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            max-width: 900px;
+        }
+        .cover-desc {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 720px;
+            line-height: 1.7;
+        }
+        .cover-stats {
+            display: flex;
+            gap: 40px;
+            margin-top: 20px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-val {
+            font-family: var(--font-heading);
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--accent-cyan);
+        }
+        .stat-lbl {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Banner Alert */
+        .alert-box {
+            display: flex;
+            gap: 14px;
+            padding: 16px 20px;
+            border-radius: var(--radius-md);
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+        .alert-info {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            color: #a5f3fc;
+        }
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: #fde68a;
+        }
+        .alert-danger {
+            background: rgba(244, 63, 94, 0.1);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: #fecdd3;
+        }
+        .alert-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .cover-title { font-size: 2.5rem; }
+            .slide { padding: 24px; height: 82vh; }
+            .shortcuts-hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Progress Bar -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="brand-badge">
+            <div class="brand-logo">
+                <i class="fa-solid fa-diagram-project"></i>
+            </div>
+            <div class="brand-text">
+                <h1>Lab 19 · GraphRAG Guide</h1>
+                <p>AICB-K34 · Track 3: GraphRAG</p>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button class="btn-icon" id="btnToc" title="Danh mục Slide (TOC)">
+                <i class="fa-solid fa-list-ul"></i>
+            </button>
+            <div class="slide-counter" id="slideCounter">1 / 10</div>
+            <button class="btn-icon" id="btnFullscreen" title="Toàn màn hình">
+                <i class="fa-solid fa-expand"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Table of Contents Drawer -->
+    <div class="drawer-overlay" id="drawerOverlay"></div>
+    <div class="drawer" id="drawer">
+        <div class="drawer-header">
+            <h3><i class="fa-solid fa-bars-staggered"></i> Danh mục Slide</h3>
+            <button class="btn-icon" id="btnCloseDrawer"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="toc-list" id="tocList">
+            <!-- Populated dynamically via JS -->
+        </div>
+    </div>
+
+    <!-- Slide Deck Container -->
+    <main class="slides-container">
+
+        <!-- SLIDE 1: Cover -->
+        <section class="slide active" data-title="Tổng quan Lab 19">
+            <div class="cover-content">
+                <div class="cover-badge">
+                    <i class="fa-solid fa-bolt"></i> Production-Grade Knowledge Graph RAG
+                </div>
+                <h1 class="cover-title">Lab 19: GraphRAG vs Flat RAG</h1>
+                <p class="cover-desc">
+                    Hướng dẫn thực thi chi tiết từng bước xây dựng đồ thị tri thức <strong>Neo4j</strong>, trích xuất thực thể <strong>NER & RE</strong>, giải quyết đa nghĩa, <strong>Super-Node Mitigation</strong> và đánh giá bằng <strong>LLM-as-a-Judge</strong>.
+                </p>
+                <div class="cover-stats">
+                    <div class="stat-item">
+                        <div class="stat-val">120'</div>
+                        <div class="stat-lbl">Thời gian Code</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-val">5</div>
+                        <div class="stat-lbl">Modules Chính</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-val">100 + 10</div>
+                        <div class="stat-lbl">Thang Điểm & Bonus</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-val">100%</div>
+                        <div class="stat-lbl">Provenance Trace</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 2: Architecture & Workflow -->
+        <section class="slide" data-title="Kiến trúc Tổng thể">
+            <span class="slide-tag tag-cyan"><i class="fa-solid fa-sitemap"></i> System Architecture</span>
+            <h2 class="slide-title">Luồng Dữ liệu: Flat RAG vs GraphRAG</h2>
+            <p class="slide-subtitle">So sánh pipeline trích xuất vector thông thường và đồ thị tri thức liên kết ngữ nghĩa</p>
+            
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-indigo"><i class="fa-solid fa-magnifying-glass"></i></div>
+                            <div>
+                                <h3 class="card-title">Flat RAG (Vector Baseline)</h3>
+                                <p class="card-desc" style="color: var(--accent-indigo); font-size: 0.8rem; font-weight: 600;">Cosine Similarity · FAISS FlatIP</p>
+                            </div>
+                        </div>
+                        <div class="step-list">
+                            <div class="step-item">
+                                <div class="step-num">1</div>
+                                <div class="step-content">
+                                    <h4>Chunking Văn bản</h4>
+                                    <p>Chia tài liệu thành các đoạn cố định (220 words, 40 overlap).</p>
+                                </div>
+                            </div>
+                            <div class="step-item">
+                                <div class="step-num">2</div>
+                                <div class="step-content">
+                                    <h4>Vector Embedding</h4>
+                                    <p>Sử dụng <code>sentence-transformers/all-MiniLM-L6-v2</code> tạo vector.</p>
+                                </div>
+                            </div>
+                            <div class="step-item">
+                                <div class="step-num">3</div>
+                                <div class="step-content">
+                                    <h4>Vector Top-K Retrieval</h4>
+                                    <p>Truy vấn Top-6 chunks tương đồng. Thường thất bại với multi-hop!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-cyan"><i class="fa-solid fa-circle-nodes"></i></div>
+                            <div>
+                                <h3 class="card-title">Hybrid GraphRAG (Production)</h3>
+                                <p class="card-desc" style="color: var(--accent-cyan); font-size: 0.8rem; font-weight: 600;">Neo4j · BFS Traversal · Provenance</p>
+                            </div>
+                        </div>
+                        <div class="step-list">
+                            <div class="step-item">
+                                <div class="step-num">1</div>
+                                <div class="step-content">
+                                    <h4>NER + RE Extraction</h4>
+                                    <p>Trích xuất quan hệ có cấu trúc strict JSON (Company, Person, Tech).</p>
+                                </div>
+                            </div>
+                            <div class="step-item">
+                                <div class="step-num">2</div>
+                                <div class="step-content">
+                                    <h4>Entity Resolution & Cypher Ingest</h4>
+                                    <p>Khử trùng lặp tên thực thể (Union-Find) và Bulk Ingest vào Neo4j.</p>
+                                </div>
+                            </div>
+                            <div class="step-item">
+                                <div class="step-num">3</div>
+                                <div class="step-content">
+                                    <h4>Seed Matching & BFS Subgraph</h4>
+                                    <p>Khám phá 2-hop lân cận, chặn Super-Nodes và tạo Hybrid Prompt.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert-box alert-info">
+                    <i class="fa-solid fa-lightbulb alert-icon"></i>
+                    <div>
+                        <strong>Điểm mấu chốt:</strong> Flat RAG tìm kiếm theo "từ khóa/ngữ nghĩa gần", còn GraphRAG tìm kiếm theo "mối quan hệ bắc cầu giữa các thực thể". Khi câu hỏi đòi hỏi kết nối 2 bài báo khác nhau, chỉ GraphRAG mới xâu chuỗi được.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 3: Prerequisites & Secrets -->
+        <section class="slide" data-title="Cấu hình & Môi trường">
+            <span class="slide-tag tag-indigo"><i class="fa-solid fa-key"></i> Setup & Keys</span>
+            <h2 class="slide-title">Chuẩn bị API Keys & Môi trường</h2>
+            <p class="slide-subtitle">Các thông số bắt buộc phải cấu hình trước khi thực thi Notebook</p>
+            
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-purple"><i class="fa-solid fa-database"></i></div>
+                            <h3 class="card-title">1. Neo4j AuraDB (Miễn phí)</h3>
+                        </div>
+                        <p class="card-desc" style="margin-bottom: 12px;">Đăng ký tài khoản tại <a href="https://console.neo4j.io/" target="_blank" style="color: var(--accent-cyan);">console.neo4j.io</a> và tạo 1 Blank Instance:</p>
+                        <div class="code-wrapper">
+                            <div class="code-header">
+                                <span class="code-lang">ENV CONFIG</span>
+                            </div>
+                            <pre><code>NEO4J_URI=neo4j+s://&lt;your-id&gt;.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=&lt;your-password&gt;
+NEO4J_DATABASE=neo4j</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-emerald"><i class="fa-solid fa-microchip"></i></div>
+                            <h3 class="card-title">2. LLM & Dataset Access</h3>
+                        </div>
+                        <p class="card-desc" style="margin-bottom: 12px;">Lấy API key từ Groq Console và Hugging Face Access Token:</p>
+                        <div class="code-wrapper">
+                            <div class="code-header">
+                                <span class="code-lang">ENV CONFIG</span>
+                            </div>
+                            <pre><code>GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile
+HF_TOKEN=hf_...
+JUDGE_PROVIDER=groq     <span class="hl-comment"># hoặc 'openai'</span>
+JUDGE_MODEL=llama-3.3-70b-versatile</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert-box alert-warning">
+                    <i class="fa-solid fa-triangle-exclamation alert-icon"></i>
+                    <div>
+                        <strong>Scale Guard (Quy tắc an toàn):</strong> Để không bị lỗi tràn RAM hoặc nghẽn Groq Rate-Limit trong thời gian thực hành:<br>
+                        • <code>LAB_MAX_ARTICLES = 1500</code> • <code>LAB_MAX_CHUNKS = 3000</code> • <code>EXTRACTION_MAX_CHUNKS = 400</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 4: Module 1 Preprocessing -->
+        <section class="slide" data-title="Module 1: Preprocessing & Coref">
+            <span class="slide-tag tag-purple"><i class="fa-solid fa-filter"></i> Module 1</span>
+            <h2 class="slide-title">Tiền xử lý & Coreference Resolution</h2>
+            <p class="slide-subtitle">Khử trùng lặp văn bản và giải quyết đại từ nhân xưng tránh tạo cạnh giả</p>
+            
+            <div class="slide-body">
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-cyan"><i class="fa-solid fa-clone"></i></div>
+                            <h3 class="card-title">Exact Dedup</h3>
+                        </div>
+                        <p class="card-desc">
+                            Chuẩn hóa khoảng trắng & unicode NFKC. Tạo mã <strong>SHA-1</strong> trên <code>title + text</code> để loại bỏ toàn bộ bài báo duplicate.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-indigo"><i class="fa-solid fa-scissors"></i></div>
+                            <h3 class="card-title">Rolling Chunking</h3>
+                        </div>
+                        <p class="card-desc">
+                            Cắt văn bản theo rolling window: <strong>220 từ/chunk</strong>, bước gối đầu (overlap) <strong>40 từ</strong> để không bị đứt đoạn ngữ cảnh.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-rose"><i class="fa-solid fa-shield-halved"></i></div>
+                            <h3 class="card-title">Conservative Coref</h3>
+                        </div>
+                        <p class="card-desc">
+                            Chỉ thay <em>"it", "they", "the company"</em> thành tên entity khi tiền ngữ xuất hiện rõ ràng trong chunk. Nếu mơ hồ ➔ <strong>Giữ nguyên</strong>.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="code-wrapper">
+                    <div class="code-header">
+                        <span class="code-lang">Python — Cell 1.7 Coreference Rule</span>
+                        <button class="btn-copy" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                    </div>
+                    <pre><code><span class="hl-comment"># Quy tắc Conservative: Tránh False Coreference</span>
+<span class="hl-keyword">if</span> confidence &lt; <span class="hl-param">0.85</span> <span class="hl-keyword">or</span> is_ambiguous:
+    unresolved_mentions.append(mention)
+    <span class="hl-keyword">return</span> original_chunk_text  <span class="hl-comment"># Không ép thay thế để tránh hallucination</span></code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 5: Module 2 Extraction & Neo4j Ingestion -->
+        <section class="slide" data-title="Module 2: Ingestion Neo4j">
+            <span class="slide-tag tag-emerald"><i class="fa-solid fa-network-wired"></i> Module 2</span>
+            <h2 class="slide-title">Trích xuất Triples & Nạp Neo4j UNWIND</h2>
+            <p class="slide-subtitle">Thiết kế schema nghiêm ngặt và lưu vết nguồn gốc (Edge Provenance) 100%</p>
+            
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-emerald"><i class="fa-solid fa-list-check"></i></div>
+                            <h3 class="card-title">Graph Schema Chuẩn</h3>
+                        </div>
+                        <p class="card-desc" style="margin-bottom: 8px;"><strong>Node Labels:</strong> <code>Company</code>, <code>Person</code>, <code>Technology</code> (Base: <code>Entity</code>)</p>
+                        <p class="card-desc"><strong>Allowed Relations:</strong> <code>ACQUIRED</code>, <code>DEVELOPED</code>, <code>INVESTED_IN</code>, <code>FOUNDED</code>, <code>WORKED_AT</code>, <code>PARTNERED_WITH</code>, <code>USES</code>, <code>LEADS</code></p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-amber"><i class="fa-solid fa-fingerprint"></i></div>
+                            <h3 class="card-title">Edge Provenance (Bắt buộc)</h3>
+                        </div>
+                        <ul style="padding-left: 20px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                            <li><code>source_chunk_id</code>: ID đoạn văn trích xuất.</li>
+                            <li><code>published_date</code>: Ngày xuất bản bài viết.</li>
+                            <li><code>evidence</code>: Câu văn làm bằng chứng thực tế.</li>
+                            <li><code>confidence</code>: Độ tin cậy (0.0 – 1.0).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="code-wrapper">
+                    <div class="code-header">
+                        <span class="code-lang">Cypher — Cell 2.3 Bulk Ingestion (UNWIND Batch)</span>
+                        <button class="btn-copy" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                    </div>
+                    <pre><code><span class="hl-keyword">UNWIND</span> $rows <span class="hl-keyword">AS</span> row
+<span class="hl-keyword">MERGE</span> (s:Entity {id: row.source_id})
+  <span class="hl-keyword">ON CREATE SET</span> s.name = row.source_name, s.name_norm = row.source_norm
+<span class="hl-keyword">MERGE</span> (t:Entity {id: row.target_id})
+  <span class="hl-keyword">ON CREATE SET</span> t.name = row.target_name, t.name_norm = row.target_norm
+<span class="hl-keyword">MERGE</span> (s)-[r:RELATION {type: row.relation, source_chunk_id: row.source_chunk_id}]->(t)
+<span class="hl-keyword">SET</span> r.published_date = row.published_date, r.evidence = row.evidence, r.confidence = row.confidence</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 6: Module 3 Entity Resolution -->
+        <section class="slide" data-title="Module 3: Entity Resolution">
+            <span class="slide-tag tag-cyan"><i class="fa-solid fa-object-group"></i> Module 3</span>
+            <h2 class="slide-title">Entity Resolution: Vector ANN + Lexical Guard</h2>
+            <p class="slide-subtitle">Hợp nhất các biến thể tên gọi thực thể mà không làm gộp nhầm</p>
+            
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-cyan"><i class="fa-solid fa-code-merge"></i></div>
+                            <h3 class="card-title">Cơ chế Hợp nhất (Union-Find)</h3>
+                        </div>
+                        <div class="step-list">
+                            <div class="step-item">
+                                <div class="step-num">1</div>
+                                <div class="step-content">
+                                    <h4>Xóa Hậu tố Pháp lý</h4>
+                                    <p>Loại bỏ <em>"Inc", "Corp", "Ltd", "LLC"</em> (ví dụ: "Apple Inc" ➔ "Apple").</p>
+                                </div>
+                            </div>
+                            <div class="step-item">
+                                <div class="step-num">2</div>
+                                <div class="step-content">
+                                    <h4>Vector ANN Cosine Match</h4>
+                                    <p>Tính cosine similarity giữa các embeddings (ngưỡng <code>threshold = 0.88</code>).</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-rose"><i class="fa-solid fa-shield-virus"></i></div>
+                            <h3 class="card-title">Lexical Guard (Chặn Gộp Sai)</h3>
+                        </div>
+                        <p class="card-desc" style="line-height: 1.6;">
+                            Một số thực thể có vector embedding rất gần nhau nhưng là 2 đối tượng hoàn toàn khác nhau:
+                        </p>
+                        <div class="alert-box alert-danger" style="margin-top: 10px; padding: 10px 14px;">
+                            <strong>Ví dụ bị chặn:</strong><br>
+                            • <code>Apple</code> vs <code>Apple Music</code> (Company vs Product)<br>
+                            • <code>Google</code> vs <code>Google Cloud</code> (Parent vs Sub-service)
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert-box alert-info">
+                    <i class="fa-solid fa-table-list alert-icon"></i>
+                    <div>
+                        <strong>Yêu cầu nộp bài:</strong> Xuất bảng <code>entity_resolution_audit_df</code> có ít nhất 10+ dòng ghi rõ: <code>entity_a</code>, <code>entity_b</code>, <code>similarity_score</code>, <code>decision (MERGE / BLOCKED)</code>, <code>reason</code>.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 7: Module 4 Hybrid GraphRAG & Super-Nodes -->
+        <section class="slide" data-title="Module 4: Retrieval & Super-Nodes">
+            <span class="slide-tag tag-indigo"><i class="fa-solid fa-route"></i> Module 4</span>
+            <h2 class="slide-title">Hybrid Retrieval & Super-Node Mitigation</h2>
+            <p class="slide-subtitle">Trích xuất Seed Entity, duyệt đồ thị BFS và kiểm soát bùng nổ ngữ cảnh</p>
+            
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-indigo"><i class="fa-solid fa-seedling"></i></div>
+                            <h3 class="card-title">1. Seed Entity Resolution</h3>
+                        </div>
+                        <p class="card-desc">
+                            LLM trích xuất danh sách entity hạt nhân từ câu hỏi. Khớp chính xác trên Neo4j theo <code>name_norm</code>. Nếu không khớp ➔ fallback tìm kiếm vector similarity $\ge 0.66$.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-amber"><i class="fa-solid fa-bomb"></i></div>
+                            <h3 class="card-title">2. Super-Node Policy</h3>
+                        </div>
+                        <p class="card-desc">
+                            Các thực thể như <strong>Google, Microsoft</strong> có hàng nghìn liên kết (degree > 100).<br>
+                            <strong>Chính sách:</strong> Chỉ lấy tối đa <strong>50 cạnh mới nhất</strong> theo <code>published_date DESC</code>. Giới hạn toàn context $\le 250$ edges.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="code-wrapper">
+                    <div class="code-header">
+                        <span class="code-lang">Text — Linearized Subgraph Context Example</span>
+                    </div>
+                    <pre><code>Microsoft [Company] -INVESTED_IN-> OpenAI [Company] | date=2023-01-23 | chunk=art_01::c0002 | evidence=Microsoft invested $10 billion...
+OpenAI [Company] -DEVELOPED-> GPT-4 [Technology] | date=2023-03-14 | chunk=art_04::c0010 | evidence=OpenAI officially launched GPT-4...</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 8: Module 5 Golden Eval & LLM Judge -->
+        <section class="slide" data-title="Module 5: Evaluation & Benchmark">
+            <span class="slide-tag tag-emerald"><i class="fa-solid fa-scale-balanced"></i> Module 5</span>
+            <h2 class="slide-title">Golden Dataset & Đánh giá LLM-as-a-Judge</h2>
+            <p class="slide-subtitle">So sánh khách quan chất lượng, độ trễ và số lượng token tiêu thụ</p>
+            
+            <div class="slide-body">
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-cyan"><i class="fa-solid fa-bullseye"></i></div>
+                            <h3 class="card-title">Comprehensiveness</h3>
+                        </div>
+                        <p class="card-desc">
+                            Thang điểm 1–5: Đánh giá câu trả lời có bao quát đầy đủ tất cả các khía cạnh và thực thể được hỏi trong câu hỏi không.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-emerald"><i class="fa-solid fa-check-double"></i></div>
+                            <h3 class="card-title">Faithfulness</h3>
+                        </div>
+                        <p class="card-desc">
+                            Thang điểm 1–5: Mọi luận điểm trả lời có được chứng minh bằng context trích xuất không? Trừ điểm nặng nếu hallucination.
+                        </p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-purple"><i class="fa-solid fa-link"></i></div>
+                            <h3 class="card-title">Multi-hop Reasoning</h3>
+                        </div>
+                        <p class="card-desc">
+                            Thang điểm 1–5: Khả năng nối chuỗi logic giữa $\ge 2$ quan hệ từ các văn bản khác nhau để đưa ra kết luận chính xác.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="alert-box alert-info">
+                    <i class="fa-solid fa-file-export alert-icon"></i>
+                    <div>
+                        <strong>2 File Output bắt buộc phải sinh ra:</strong><br>
+                        1. <code>outputs/graphrag_eval_results.csv</code>: Chi tiết điểm từng câu hỏi theo từng tiêu chí.<br>
+                        2. <code>outputs/graphrag_vs_flatrag_summary.csv</code>: Bảng tổng kết trung bình điểm chất lượng, thời gian thực thi (Latency) và Token count.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 9: Report & Reflection Guide -->
+        <section class="slide" data-title="Báo cáo & Thuyết minh Kỹ thuật">
+            <span class="slide-tag tag-purple"><i class="fa-solid fa-pen-nib"></i> Report</span>
+            <h2 class="slide-title">Hướng dẫn Hoàn thành lab_report.md</h2>
+            <p class="slide-subtitle">Điền đầy đủ 2 phần trong file <code>reports/lab_report.md</code> để đạt trọn vẹn điểm</p>
+            
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-indigo"><i class="fa-solid fa-file-lines"></i></div>
+                            <h3 class="card-title">Phần 1: Thuyết minh (10 câu hỏi)</h3>
+                        </div>
+                        <ul style="padding-left: 20px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.7;">
+                            <li><strong>Câu 1:</strong> Phân tích 1 ca Coref sai & nguy cơ False Edge.</li>
+                            <li><strong>Câu 2:</strong> Ngưỡng Cosine & ví dụ Lexical Guard chặn gộp.</li>
+                            <li><strong>Câu 3:</strong> Top 3 Super-nodes & ưu/nhược điểm cap 50 cạnh.</li>
+                            <li><strong>Câu 4:</strong> Bảng Benchmark & phân tích 2 ca lỗi thực tế.</li>
+                            <li><strong>Câu 5:</strong> Đánh đổi chi phí, Agent control & kiến trúc scale 350MB.</li>
+                        </ul>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon icon-emerald"><i class="fa-solid fa-brain"></i></div>
+                            <h3 class="card-title">Phần 2: Reflection & Kế hoạch Đồ án</h3>
+                        </div>
+                        <ul style="padding-left: 20px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.7;">
+                            <li><strong>Mục 1:</strong> Bảng Mapping 5 module bài giảng vào các hàm code tương ứng.</li>
+                            <li><strong>Mục 2:</strong> Lỗi kỹ thuật khó nhất trong bài lab & cách xử lý.</li>
+                            <li><strong>Mục 3:</strong> Đồ án thực tế của bạn có cần GraphRAG không? Thiết kế sơ bộ Node/Edge và chiến lược Entity Resolution.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="alert-box alert-warning">
+                    <i class="fa-solid fa-circle-exclamation alert-icon"></i>
+                    <div>
+                        <strong>Lưu ý:</strong> Câu trả lời phải có số liệu thực tế từ lần chạy notebook của bạn (ví dụ: tên node bậc cao nhất trong Neo4j của bạn, điểm số chính xác từ file CSV).
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SLIDE 10: Checklist & Submission -->
+        <section class="slide" data-title="Checklist Nộp bài">
+            <span class="slide-tag tag-emerald"><i class="fa-solid fa-circle-check"></i> Final Checklist</span>
+            <h2 class="slide-title">Kiểm tra Hoàn tất & Nộp bài</h2>
+            <p class="slide-subtitle">Nhấp chọn các mục bên dưới để tự kiểm tra trước khi commit bài nộp</p>
+            
+            <div class="slide-body">
+                <div class="checklist" id="finalChecklist">
+                    <div class="check-item" onclick="toggleCheck(this)">
+                        <div class="custom-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+                        <span class="check-text">Đã kết nối thành công Neo4j AuraDB và thiết lập Unique Constraints / Indexes</span>
+                    </div>
+                    <div class="check-item" onclick="toggleCheck(this)">
+                        <div class="custom-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+                        <span class="check-text">Notebook <code>Day19_GraphRAG_vs_FlatRAG_Production_Lab_Guide.ipynb</code> đã chạy xong toàn bộ các cell (không có cell lỗi)</span>
+                    </div>
+                    <div class="check-item" onclick="toggleCheck(this)">
+                        <div class="custom-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+                        <span class="check-text">Sanity Check đảm bảo <strong>0 cạnh bị thiếu</strong> <code>source_chunk_id</code> hoặc <code>published_date</code></span>
+                    </div>
+                    <div class="check-item" onclick="toggleCheck(this)">
+                        <div class="custom-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+                        <span class="check-text">Đã sinh đủ 2 file: <code>outputs/graphrag_eval_results.csv</code> và <code>outputs/graphrag_vs_flatrag_summary.csv</code></span>
+                    </div>
+                    <div class="check-item" onclick="toggleCheck(this)">
+                        <div class="custom-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+                        <span class="check-text">Đã điền đầy đủ cả 2 phần trong file báo cáo <code>reports/lab_report.md</code></span>
+                    </div>
+                    <div class="check-item" onclick="toggleCheck(this)">
+                        <div class="custom-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+                        <span class="check-text">Đã ẩn/xóa toàn bộ API keys bí mật trong code trước khi Push GitHub repo</span>
+                    </div>
+                </div>
+
+                <div class="card" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3);">
+                    <div class="card-header">
+                        <div class="card-icon icon-emerald"><i class="fa-solid fa-upload"></i></div>
+                        <h3 class="card-title" style="color: var(--accent-emerald);">Lệnh Git Commit & Push</h3>
+                    </div>
+                    <div class="code-wrapper" style="margin-top: 8px;">
+                        <pre><code>git add Day19_GraphRAG_vs_FlatRAG_Production_Lab_Guide.ipynb outputs/ reports/lab_report.md
+git commit -m "feat(lab19): complete GraphRAG pipeline benchmark and report"
+git push origin main</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer Controls -->
+    <footer class="footer-controls">
+        <div class="shortcuts-hint">
+            <span>Dùng phím:</span>
+            <span><span class="key-badge">←</span> / <span class="key-badge">→</span> Di chuyển</span>
+            <span><span class="key-badge">TOC</span> Danh mục</span>
+            <span><span class="key-badge">F</span> Toàn màn hình</span>
+        </div>
+
+        <div class="nav-buttons">
+            <button class="btn-nav" id="btnPrev" disabled>
+                <i class="fa-solid fa-arrow-left"></i> Trang trước
+            </button>
+            <button class="btn-nav btn-nav-primary" id="btnNext">
+                Trang kế tiếp <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Presentation Engine Script -->
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+        
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const slideCounter = document.getElementById('slideCounter');
+        const progressBar = document.getElementById('progressBar');
+        
+        const drawer = document.getElementById('drawer');
+        const drawerOverlay = document.getElementById('drawerOverlay');
+        const btnToc = document.getElementById('btnToc');
+        const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+        const tocList = document.getElementById('tocList');
+        const btnFullscreen = document.getElementById('btnFullscreen');
+
+        // Build Table of Contents dynamically
+        slides.forEach((slide, idx) => {
+            const title = slide.getAttribute('data-title') || `Slide ${idx + 1}`;
+            const item = document.createElement('div');
+            item.className = `toc-item ${idx === 0 ? 'active' : ''}`;
+            item.innerHTML = `<span><strong>${idx + 1}.</strong> ${title}</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.75rem; opacity: 0.5;"></i>`;
+            item.addEventListener('click', () => {
+                goToSlide(idx);
+                closeDrawer();
+            });
+            tocList.appendChild(item);
+        });
+
+        function updateSlideUI() {
+            slides.forEach((slide, idx) => {
+                slide.classList.toggle('active', idx === currentSlide);
+            });
+
+            // Update Progress & Counter
+            const progress = ((currentSlide + 1) / totalSlides) * 100;
+            progressBar.style.width = `${progress}%`;
+            slideCounter.textContent = `${currentSlide + 1} / ${totalSlides}`;
+
+            // Update Button states
+            btnPrev.disabled = currentSlide === 0;
+            if (currentSlide === totalSlides - 1) {
+                btnNext.innerHTML = '<i class="fa-solid fa-check"></i> Hoàn thành';
+            } else {
+                btnNext.innerHTML = 'Trang kế tiếp <i class="fa-solid fa-arrow-right"></i>';
+            }
+
+            // Update TOC active state
+            const tocItems = tocList.querySelectorAll('.toc-item');
+            tocItems.forEach((item, idx) => {
+                item.classList.toggle('active', idx === currentSlide);
+            });
+        }
+
+        function goToSlide(index) {
+            if (index >= 0 && index < totalSlides) {
+                currentSlide = index;
+                updateSlideUI();
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlideUI();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlideUI();
+            }
+        }
+
+        // Event Listeners
+        btnNext.addEventListener('click', nextSlide);
+        btnPrev.addEventListener('click', prevSlide);
+
+        // Keyboard Navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                goToSlide(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                goToSlide(totalSlides - 1);
+            } else if (e.key === 'f' || e.key === 'F') {
+                toggleFullscreen();
+            }
+        });
+
+        // Drawer Controls
+        function openDrawer() {
+            drawer.classList.add('open');
+            drawerOverlay.classList.add('open');
+        }
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            drawerOverlay.classList.remove('open');
+        }
+        btnToc.addEventListener('click', openDrawer);
+        btnCloseDrawer.addEventListener('click', closeDrawer);
+        drawerOverlay.addEventListener('click', closeDrawer);
+
+        // Fullscreen Toggle
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.log(err));
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+        btnFullscreen.addEventListener('click', toggleFullscreen);
+
+        // Copy Code Helper
+        function copyCode(btn) {
+            const pre = btn.closest('.code-wrapper').querySelector('pre');
+            navigator.clipboard.writeText(pre.innerText).then(() => {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-check" style="color: var(--accent-emerald);"></i> Đã chép';
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                }, 2000);
+            });
+        }
+
+        // Interactive Checklist
+        function toggleCheck(item) {
+            item.classList.toggle('done');
+        }
+
+        // Init
+        updateSlideUI();
+    </script>
+</body>
+</html>

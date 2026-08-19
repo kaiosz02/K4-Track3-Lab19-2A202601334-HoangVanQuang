@@ -214,7 +214,7 @@ Day19-Track3-GraphRAG/
 - [ ] Chạy hoàn tất LLM Judge và xuất đủ 2 file CSV vào thư mục `outputs/`.
 - [ ] Đã hoàn thành đầy đủ cả 2 phần trong file báo cáo `reports/lab_report.md`.
 - [ ] Push toàn bộ repo lên GitHub và nộp đường link.
-�� (Action Plan)
+ (Action Plan)
 - Đồ án của bạn có cần đến GraphRAG không, hay Flat RAG / Hybrid RAG là đủ?
 - Nếu áp dụng GraphRAG, cấu trúc Node/Relation của bài toán bạn là gì?
 - Chiến lược giải quyết Entity Resolution và Super-node trong bài toán cụ thể của bạn.
